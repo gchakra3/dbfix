@@ -82,6 +82,25 @@ export function WeeklyClassScheduler() {
     try {
       setLoading(true)
       
+      // First, get the instructor role ID
+      const { data: instructorRole, error: roleError } = await supabase
+        .from('roles')
+        .select('id')
+        .eq('name', 'instructor')
+        .single()
+
+      if (roleError) throw roleError
+
+      // Then get all user IDs with instructor role
+      const { data: instructorUserRoles, error: userRolesError } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .eq('role_id', instructorRole.id)
+
+      if (userRolesError) throw userRolesError
+
+      const instructorUserIds = instructorUserRoles.map(ur => ur.user_id)
+
       const [schedulesRes, classTypesRes, instructorsRes] = await Promise.all([
         supabase
           .from('class_schedules')
@@ -99,20 +118,11 @@ export function WeeklyClassScheduler() {
           .eq('is_active', true)
           .order('name'),
         
+        // Get profiles for users with instructor role
         supabase
           .from('profiles')
-          .select(`
-            user_id,
-            full_name,
-            bio,
-            specialties,
-            user_roles!inner(
-              roles!inner(
-                name
-              )
-            )
-          `)
-          .eq('user_roles.roles.name', 'instructor')
+          .select('user_id, full_name, bio, specialties')
+          .in('user_id', instructorUserIds)
           .order('full_name')
       ])
 
