@@ -54,20 +54,27 @@ export function InstructorManagement() {
     try {
       setLoading(true)
       
-      // First, get the instructor role ID
+      // First, get both instructor and yoga_acharya role IDs
       const { data: roleData, error: roleError } = await supabase
         .from('roles')
-        .select('id')
-        .eq('name', 'instructor')
-        .single()
+        .select('id, name')
+        .in('name', ['instructor', 'yoga_acharya'])
 
       if (roleError) throw roleError
 
-      // Then, get all user IDs that have the instructor role
+      if (!roleData || roleData.length === 0) {
+        setInstructors([])
+        return
+      }
+
+      // Extract role IDs
+      const roleIds = roleData.map(role => role.id)
+
+      // Then, get all user IDs that have either instructor or yoga_acharya role
       const { data: userRoleData, error: userRoleError } = await supabase
         .from('user_roles')
         .select('user_id')
-        .eq('role_id', roleData.id)
+        .in('role_id', roleIds)
 
       if (userRoleError) throw userRoleError
 
@@ -76,8 +83,8 @@ export function InstructorManagement() {
         return
       }
 
-      // Extract user IDs
-      const instructorUserIds = userRoleData.map(ur => ur.user_id)
+      // Extract unique user IDs (in case a user has both roles)
+      const instructorUserIds = [...new Set(userRoleData.map(ur => ur.user_id))]
 
       // Finally, fetch profiles for these users
       const { data: profileData, error: profileError } = await supabase
