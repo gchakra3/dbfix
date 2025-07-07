@@ -53,34 +53,43 @@ export function InstructorManagement() {
   const fetchInstructors = async () => {
     try {
       setLoading(true)
-      // Fetch profiles that have the 'instructor' role
-      const { data, error } = await supabase
+      
+      // First, get the instructor role ID
+      const { data: roleData, error: roleError } = await supabase
+        .from('roles')
+        .select('id')
+        .eq('name', 'instructor')
+        .single()
+
+      if (roleError) throw roleError
+
+      // Then, get all user IDs that have the instructor role
+      const { data: userRoleData, error: userRoleError } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .eq('role_id', roleData.id)
+
+      if (userRoleError) throw userRoleError
+
+      if (!userRoleData || userRoleData.length === 0) {
+        setInstructors([])
+        return
+      }
+
+      // Extract user IDs
+      const instructorUserIds = userRoleData.map(ur => ur.user_id)
+
+      // Finally, fetch profiles for these users
+      const { data: profileData, error: profileError } = await supabase
         .from('profiles')
-        .select(`
-          id,
-          user_id,
-          full_name,
-          email,
-          phone,
-          bio,
-          specialties,
-          experience_years,
-          certification,
-          avatar_url,
-          is_active,
-          user_roles!inner (
-            roles!inner (
-              name
-            )
-          )
-        `)
-        .eq('user_roles.roles.name', 'instructor')
+        .select('*')
+        .in('user_id', instructorUserIds)
         .order('full_name')
 
-      if (error) throw error
+      if (profileError) throw profileError
       
       // Map the data to the Instructor interface
-      const instructorData = data?.map(profile => ({
+      const instructorData = profileData?.map(profile => ({
         id: profile.id,
         user_id: profile.user_id,
         full_name: profile.full_name || '',
