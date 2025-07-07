@@ -55,7 +55,7 @@ export function WeeklySchedule() {
       const bookingData = {
         user_id: user.id,
         class_name: schedule.class_type.name,
-        instructor: schedule.instructor.name,
+        instructor: schedule.instructor.full_name,
         class_date: classDate,
         class_time: schedule.start_time,
         first_name: user.user_metadata?.full_name?.split(' ')[0] || '',
@@ -161,7 +161,7 @@ export function WeeklySchedule() {
                     
                     <div className="flex items-center">
                       <Award className="w-3 h-3 mr-1" />
-                      {schedule.instructor.name}
+                      {schedule.instructor.full_name}
                     </div>
                     
                     {schedule.class_type.price && (
