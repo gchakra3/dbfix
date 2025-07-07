@@ -6,7 +6,8 @@ import { supabase } from '../../../shared/lib/supabase'
 
 interface Instructor {
   id?: string
-  name: string
+  user_id?: string
+  full_name: string
   bio: string
   email: string
   phone: string
@@ -26,7 +27,7 @@ export function InstructorManagement() {
   const [errors, setErrors] = useState<any>({})
 
   const [formData, setFormData] = useState<Instructor>({
-    name: '',
+    full_name: '',
     bio: '',
     email: '',
     phone: '',
@@ -52,13 +53,48 @@ export function InstructorManagement() {
   const fetchInstructors = async () => {
     try {
       setLoading(true)
+      // Fetch profiles that have the 'instructor' role
       const { data, error } = await supabase
-        .from('instructors')
-        .select('*')
-        .order('name')
+        .from('profiles')
+        .select(`
+          id,
+          user_id,
+          full_name,
+          email,
+          phone,
+          bio,
+          specialties,
+          experience_years,
+          certification,
+          avatar_url,
+          is_active,
+          user_roles!inner (
+            roles!inner (
+              name
+            )
+          )
+        `)
+        .eq('user_roles.roles.name', 'instructor')
+        .order('full_name')
 
       if (error) throw error
-      setInstructors(data || [])
+      
+      // Map the data to the Instructor interface
+      const instructorData = data?.map(profile => ({
+        id: profile.id,
+        user_id: profile.user_id,
+        full_name: profile.full_name || '',
+        email: profile.email || '',
+        phone: profile.phone || '',
+        bio: profile.bio || '',
+        specialties: profile.specialties || [],
+        experience_years: profile.experience_years || 0,
+        certification: profile.certification || '',
+        avatar_url: profile.avatar_url || '',
+        is_active: profile.is_active ?? true
+      })) || []
+
+      setInstructors(instructorData)
     } catch (error) {
       console.error('Error fetching instructors:', error)
     } finally {
@@ -93,7 +129,7 @@ export function InstructorManagement() {
   const validateForm = () => {
     const newErrors: any = {}
 
-    if (!formData.name.trim()) newErrors.name = 'Name is required'
+    if (!formData.full_name.trim()) newErrors.full_name = 'Full name is required'
     if (!formData.email.trim()) newErrors.email = 'Email is required'
     else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = 'Invalid email format'
     if (!formData.bio.trim()) newErrors.bio = 'Bio is required'
@@ -113,24 +149,84 @@ export function InstructorManagement() {
       setSaving(true)
 
       if (editingInstructor) {
+        // Update existing instructor profile
         const { error } = await supabase
-          .from('instructors')
-          .update(formData)
+          .from('profiles')
+          .update({
+            full_name: formData.full_name,
+            email: formData.email,
+            phone: formData.phone,
+            bio: formData.bio,
+            specialties: formData.specialties,
+            experience_years: formData.experience_years,
+            certification: formData.certification,
+            avatar_url: formData.avatar_url,
+            is_active: formData.is_active
+          })
           .eq('id', editingInstructor.id)
 
         if (error) throw error
       } else {
-        const { error } = await supabase
-          .from('instructors')
-          .insert([formData])
+        // Create new instructor: need to create user, profile, and assign role
+        
+        // First, create a new user account
+        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+          email: formData.email,
+          email_confirm: true,
+          user_metadata: {
+            full_name: formData.full_name
+          }
+        })
 
-        if (error) throw error
+        if (authError) throw authError
+
+        if (!authData.user) throw new Error('Failed to create user')
+
+        // Create profile for the new user
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .insert([{
+            user_id: authData.user.id,
+            full_name: formData.full_name,
+            email: formData.email,
+            phone: formData.phone,
+            bio: formData.bio,
+            specialties: formData.specialties,
+            experience_years: formData.experience_years,
+            certification: formData.certification,
+            avatar_url: formData.avatar_url,
+            is_active: formData.is_active
+          }])
+          .select()
+          .single()
+
+        if (profileError) throw profileError
+
+        // Get the instructor role ID
+        const { data: roleData, error: roleError } = await supabase
+          .from('roles')
+          .select('id')
+          .eq('name', 'instructor')
+          .single()
+
+        if (roleError) throw roleError
+
+        // Assign instructor role to the user
+        const { error: userRoleError } = await supabase
+          .from('user_roles')
+          .insert([{
+            user_id: authData.user.id,
+            role_id: roleData.id
+          }])
+
+        if (userRoleError) throw userRoleError
       }
 
       await fetchInstructors()
       resetForm()
       alert(editingInstructor ? 'Instructor updated successfully!' : 'Instructor created successfully!')
     } catch (error: any) {
+      console.error('Error saving instructor:', error)
       setErrors({ general: error.message })
     } finally {
       setSaving(false)
@@ -143,28 +239,39 @@ export function InstructorManagement() {
     setShowForm(true)
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this instructor?')) return
+  const handleDelete = async (instructor: Instructor) => {
+    if (!confirm('Are you sure you want to remove instructor role from this user?')) return
 
     try {
+      // Get the instructor role ID
+      const { data: roleData, error: roleError } = await supabase
+        .from('roles')
+        .select('id')
+        .eq('name', 'instructor')
+        .single()
+
+      if (roleError) throw roleError
+
+      // Remove the instructor role from the user
       const { error } = await supabase
-        .from('instructors')
+        .from('user_roles')
         .delete()
-        .eq('id', id)
+        .eq('user_id', instructor.user_id)
+        .eq('role_id', roleData.id)
 
       if (error) throw error
 
       await fetchInstructors()
-      alert('Instructor deleted successfully!')
+      alert('Instructor role removed successfully!')
     } catch (error) {
-      console.error('Error deleting instructor:', error)
-      alert('Failed to delete instructor')
+      console.error('Error removing instructor role:', error)
+      alert('Failed to remove instructor role')
     }
   }
 
   const resetForm = () => {
     setFormData({
-      name: '',
+      full_name: '',
       bio: '',
       email: '',
       phone: '',
@@ -236,14 +343,14 @@ export function InstructorManagement() {
                   </label>
                   <input
                     type="text"
-                    value={formData.name}
-                    onChange={(e) => handleInputChange('name', e.target.value)}
+                    value={formData.full_name}
+                    onChange={(e) => handleInputChange('full_name', e.target.value)}
                     className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                      errors.name ? 'border-red-500' : 'border-gray-300'
+                      errors.full_name ? 'border-red-500' : 'border-gray-300'
                     }`}
                     placeholder="Enter instructor's full name"
                   />
-                  {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name}</p>}
+                  {errors.full_name && <p className="text-red-500 text-sm mt-1">{errors.full_name}</p>}
                 </div>
 
                 <div>
@@ -258,6 +365,7 @@ export function InstructorManagement() {
                       errors.email ? 'border-red-500' : 'border-gray-300'
                     }`}
                     placeholder="instructor@example.com"
+                    disabled={!!editingInstructor} // Disable email editing for existing instructors
                   />
                   {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email}</p>}
                 </div>
@@ -470,7 +578,7 @@ export function InstructorManagement() {
                     {instructor.avatar_url ? (
                       <img
                         src={instructor.avatar_url}
-                        alt={instructor.name}
+                        alt={instructor.full_name}
                         className="w-12 h-12 rounded-full object-cover"
                         onError={(e) => {
                           e.currentTarget.style.display = 'none'
@@ -482,7 +590,7 @@ export function InstructorManagement() {
                       </div>
                     )}
                     <div>
-                      <h3 className="text-lg font-semibold text-gray-900">{instructor.name}</h3>
+                      <h3 className="text-lg font-semibold text-gray-900">{instructor.full_name}</h3>
                       {instructor.certification && (
                         <p className="text-sm text-blue-600 flex items-center">
                           <Award className="w-3 h-3 mr-1" />
@@ -500,9 +608,9 @@ export function InstructorManagement() {
                       <Edit className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => handleDelete(instructor.id!)}
+                      onClick={() => handleDelete(instructor)}
                       className="text-red-600 hover:text-red-800 p-1"
-                      title="Delete"
+                      title="Remove Instructor Role"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
