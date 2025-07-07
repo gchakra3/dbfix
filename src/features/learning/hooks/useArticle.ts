@@ -18,7 +18,7 @@ export function useArticle(id: string) {
       // Fetch article
       const { data: articleData, error: articleError } = await supabase
         .from('articles')
-        .select('*')
+        .select('*, author:profiles(full_name)')
         .eq('id', id)
         .eq('status', 'published')
         .single()
@@ -29,7 +29,7 @@ export function useArticle(id: string) {
       // Fetch ratings
       const { data: ratingsData, error: ratingsError } = await supabase
         .from('ratings')
-        .select('*')
+        .select('*, author:profiles(full_name)')
         .eq('article_id', id)
 
       if (ratingsError) throw ratingsError
