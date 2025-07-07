@@ -81,7 +81,7 @@ export function ClassAssignmentManager() {
 
       if (assignmentsError) throw assignmentsError
 
-      // Fetch scheduled classes with correct relationship to profiles table
+      // Fetch scheduled classes - use the correct foreign key relationship
       const { data: classesData, error: classesError } = await supabase
         .from('scheduled_classes')
         .select(`
