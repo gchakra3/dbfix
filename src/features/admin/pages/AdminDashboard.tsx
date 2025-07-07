@@ -117,7 +117,9 @@ export function AdminDashboard() {
       const contacts = safeData(contactsRes)
       const articles = safeData(articlesRes)
       const views = safeData(viewsRes)
-      const instructors = safeData(instructorsRes)
+      const instructors = profiles.filter(profile =>
+        profile.user_roles?.some(r => ['instructor', 'yoga_acharya'].includes(r.roles?.name))
+        )
       const classTypes = safeData(classTypesRes)
       const subscriptions = safeData(subscriptionsRes)
       const transactions = safeData(transactionsRes)
