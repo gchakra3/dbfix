@@ -22,6 +22,9 @@ interface ClassAssignment {
       name: string
       difficulty_level: string
     }
+    instructor: {
+      full_name: string
+    }
   }
 }
 
@@ -58,7 +61,8 @@ export function YogaAcharyaDashboard() {
             start_time,
             end_time,
             status,
-            class_type:class_types(name, difficulty_level)
+            class_type:class_types(name, difficulty_level),
+            instructor:profiles(full_name)
           )
         `)
         .eq('instructor_id', user.id)
