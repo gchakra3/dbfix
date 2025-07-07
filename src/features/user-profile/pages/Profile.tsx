@@ -28,28 +28,7 @@ export function Profile() {
     }
   }, [user])
 
-  const fetchProfileData = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('full_name, phone, bio')
-        .eq('user_id', user!.id)
-        .single()
-
-      if (error) throw error
-
-      setProfileData({
-        fullName: data.full_name || '',
-        email: user!.email || '',
-        phone: data.phone || '',
-        bio: data.bio || ''
-      })
-    } catch (error) {
-      console.error('Error fetching profile data:', error)
-    }
-  }
-
-  const fetchProfileData = async () => {
+const fetchProfileData = async () => {
   try {
     const { data, error } = await supabase
       .from('profiles')
@@ -69,6 +48,7 @@ export function Profile() {
     console.error('Error fetching profile data:', error)
   }
 }
+
 
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
