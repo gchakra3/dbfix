@@ -49,36 +49,27 @@ export function Profile() {
     }
   }
 
-  const fetchUserData = async () => {
-    if (!user) return
+  const fetchProfileData = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('full_name, phone, bio')
+      .eq('user_id', user!.id)
+      .single()
 
-    try {
-      setLoading(true)
+    if (error) throw error
 
-      const { data: bookings, error: bookingsError } = await supabase
-        .from('bookings')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-
-      if (bookingsError) throw bookingsError
-
-      const { data: queries, error: queriesError } = await supabase
-        .from('yoga_queries')
-        .select('*')
-        .eq('email', user.email)
-        .order('created_at', { ascending: false })
-
-      if (queriesError) throw queriesError
-
-      setUserBookings(bookings || [])
-      setUserQueries(queries || [])
-    } catch (error) {
-      console.error('Error fetching user data:', error)
-    } finally {
-      setLoading(false)
-    }
+    setProfileData({
+      fullName: data.full_name || '',
+      email: user!.email || '',
+      phone: data.phone || '',
+      bio: data.bio || ''
+    })
+  } catch (error) {
+    console.error('Error fetching profile data:', error)
   }
+}
+
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -98,29 +89,30 @@ export function Profile() {
   }
 
   const handleSaveProfile = async () => {
-    if (!validateForm()) return
+  if (!validateForm()) return
 
-    try {
-      setLoading(true)
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          full_name: profileData.fullName,
-          phone: profileData.phone,
-          bio: profileData.bio
-        })
-        .eq('user_id', user!.id)
+  try {
+    setLoading(true)
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        full_name: profileData.fullName,
+        phone: profileData.phone,
+        bio: profileData.bio
+      })
+      .eq('user_id', user!.id)
 
-      if (error) throw error
+    if (error) throw error
 
-      setEditing(false)
-      alert('Profile updated successfully!')
-    } catch (error: any) {
-      setErrors({ general: error.message })
-    } finally {
-      setLoading(false)
-    }
+    setEditing(false)
+    alert('Profile updated successfully!')
+  } catch (error: any) {
+    setErrors({ general: error.message })
+  } finally {
+    setLoading(false)
   }
+}
+
 
   const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString('en-US', {
     year: 'numeric', month: 'long', day: 'numeric'
