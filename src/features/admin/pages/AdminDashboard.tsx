@@ -1,5 +1,3 @@
-// src/features/admin/pages/AdminDashboard.tsx
-
 import {
   BarChart3,
   BookOpen,
@@ -65,7 +63,7 @@ interface DashboardStats {
 export function AdminDashboard() {
   const { admin, isAdmin, signOutAdmin } = useAdmin()
   const { isMantraCurator, user, userRoles } = useAuth()
-  const { profiles, refetch: refetchProfiles } = useUserProfiles()
+  const { profiles } = useUserProfiles()
   const navigate = useNavigate()
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
@@ -95,7 +93,6 @@ export function AdminDashboard() {
         contactsRes,
         articlesRes,
         viewsRes,
-        instructorsRes,
         classTypesRes,
         subscriptionsRes,
         transactionsRes
@@ -105,7 +102,6 @@ export function AdminDashboard() {
         supabase.from('contact_messages').select('*').order('created_at', { ascending: false }),
         supabase.from('articles').select('*').order('created_at', { ascending: false }),
         supabase.from('article_views').select('*'),
-        supabase.from('instructors').select('*').order('created_at', { ascending: false }),
         supabase.from('class_types').select('*').order('created_at', { ascending: false }),
         supabase.from('user_subscriptions').select('*, subscription_plans(*)').order('created_at', { ascending: false }),
         supabase.from('transactions').select('*').order('created_at', { ascending: false })
@@ -117,12 +113,14 @@ export function AdminDashboard() {
       const contacts = safeData(contactsRes)
       const articles = safeData(articlesRes)
       const views = safeData(viewsRes)
-      const instructors = profiles.filter(profile =>
-        profile.user_roles?.some(r => ['instructor', 'yoga_acharya'].includes(r.roles?.name))
-        )
       const classTypes = safeData(classTypesRes)
       const subscriptions = safeData(subscriptionsRes)
       const transactions = safeData(transactionsRes)
+
+      // ✅ NEW: Filter instructors from profiles by role
+      const instructors = profiles.filter(profile =>
+        profile.user_roles?.some(r => ['instructor', 'yoga_acharya'].includes(r.roles?.name))
+      )
 
       const monthlyRevenue = transactions
         .filter(t => t?.status === 'completed' && new Date(t.created_at) >= new Date(new Date().getFullYear(), new Date().getMonth(), 1))
@@ -257,7 +255,6 @@ export function AdminDashboard() {
             <DashboardMetrics />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
               <UserEngagementChart />
-              {/* You may place recent activity or insights here */}
             </div>
           </>
         )}
@@ -280,7 +277,6 @@ export function AdminDashboard() {
   )
 }
 
-// Minimal reusable header
 function Header({ title, email, onSignOut }: { title: string; email?: string; onSignOut: () => void }) {
   const navigate = useNavigate()
   return (
