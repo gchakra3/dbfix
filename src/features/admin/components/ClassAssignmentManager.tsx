@@ -22,7 +22,7 @@ interface ClassAssignment {
       difficulty_level: string
     }
     instructor: {
-      name: string
+      full_name: string
     }
   }
   instructor_profile?: {
@@ -81,13 +81,13 @@ export function ClassAssignmentManager() {
 
       if (assignmentsError) throw assignmentsError
 
-      // Fetch scheduled classes
+      // Fetch scheduled classes with correct relationship to profiles table
       const { data: classesData, error: classesError } = await supabase
         .from('scheduled_classes')
         .select(`
           *,
           class_type:class_types(name, difficulty_level),
-          instructor:instructors(name)
+          instructor:profiles!scheduled_classes_instructor_id_fkey(full_name)
         `)
         .eq('status', 'scheduled')
         .order('start_time')
