@@ -39,7 +39,7 @@ export function useClassSchedule() {
         .select(`
           *,
           class_type:class_types(name, description, difficulty_level, price),
-          instructor:instructors(name, bio)
+          instructor:profiles(full_name)
         `)
         .eq('is_active', true)
         .order('day_of_week')
