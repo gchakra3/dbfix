@@ -7,6 +7,7 @@ import { useAuth } from '../../auth/contexts/AuthContext'
 interface ClassAssignment {
   id: string
   scheduled_class_id: string
+  instructor_id: string
   payment_amount: number
   payment_status: 'pending' | 'paid' | 'cancelled'
   notes?: string
@@ -19,6 +20,9 @@ interface ClassAssignment {
     class_type: {
       name: string
       difficulty_level: string
+    }
+    instructor?: {
+      full_name: string
     }
   }
 }
@@ -52,10 +56,10 @@ export function InstructorDashboard() {
             start_time,
             end_time,
             status,
-            class_type:class_types(name, difficulty_level)
+            class_type:class_types(name, difficulty_level),
+            instructor:profiles!scheduled_classes_instructor_id_fkey(full_name)
           )
         `)
-        .eq('instructor_id', user.id)
         .order('assigned_at', { ascending: false })
 
       if (error) throw error
@@ -87,7 +91,8 @@ export function InstructorDashboard() {
       
       // Search filter
       const matchesSearch = searchTerm === '' ||
-        assignment.scheduled_class.class_type.name.toLowerCase().includes(searchTerm.toLowerCase())
+        assignment.scheduled_class.class_type.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        assignment.scheduled_class.instructor?.full_name.toLowerCase().includes(searchTerm.toLowerCase())
       
       return matchesStatus && matchesTime && matchesSearch
     })
@@ -98,11 +103,11 @@ export function InstructorDashboard() {
     const upcoming = assignments.filter(a => new Date(a.scheduled_class.start_time) > now)
     const completed = assignments.filter(a => new Date(a.scheduled_class.start_time) < now)
     const unpaid = assignments.filter(a => a.payment_status === 'pending')
-    const totalEarnings = assignments
+    const totalAmount = assignments
       .filter(a => a.payment_status === 'paid')
       .reduce((sum, a) => sum + a.payment_amount, 0)
 
-    return { upcoming: upcoming.length, completed: completed.length, unpaid: unpaid.length, totalEarnings }
+    return { upcoming: upcoming.length, completed: completed.length, unpaid: unpaid.length, totalAmount }
   }
 
   const formatDateTime = (dateString: string) => {
@@ -142,8 +147,8 @@ export function InstructorDashboard() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">My Class Assignments</h2>
-        <p className="text-gray-600">View and manage your assigned classes and payment status</p>
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Instructor Dashboard</h2>
+        <p className="text-gray-600">Manage class assignments and track payments</p>
       </div>
 
       {/* Stats Cards */}
@@ -181,8 +186,8 @@ export function InstructorDashboard() {
         <div className="bg-white rounded-xl shadow-lg p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Total Earnings</p>
-              <p className="text-3xl font-bold text-emerald-600">${stats.totalEarnings}</p>
+              <p className="text-sm font-medium text-gray-600">Total Payments</p>
+              <p className="text-3xl font-bold text-emerald-600">${stats.totalAmount}</p>
             </div>
             <DollarSign className="w-8 h-8 text-emerald-600" />
           </div>
@@ -197,7 +202,7 @@ export function InstructorDashboard() {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <input
                 type="text"
-                placeholder="Search classes..."
+                placeholder="Search classes or instructors..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -243,7 +248,7 @@ export function InstructorDashboard() {
             <h3 className="text-lg font-semibold text-gray-900 mb-2">No assignments found</h3>
             <p className="text-gray-600">
               {assignments.length === 0 
-                ? "You don't have any class assignments yet."
+                ? "No class assignments have been created yet."
                 : "No assignments match your current filters."
               }
             </p>
@@ -258,6 +263,9 @@ export function InstructorDashboard() {
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Schedule
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Instructor
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Payment
@@ -292,6 +300,11 @@ export function InstructorDashboard() {
                         <div className={`text-xs ${isUpcoming(assignment.scheduled_class.start_time) ? 'text-blue-600' : 'text-gray-500'}`}>
                           {isUpcoming(assignment.scheduled_class.start_time) ? 'Upcoming' : 'Completed'}
                         </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-gray-900">
+                        {assignment.scheduled_class.instructor?.full_name || 'N/A'}
                       </div>
                     </td>
                     <td className="px-6 py-4">
