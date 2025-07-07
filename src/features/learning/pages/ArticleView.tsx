@@ -97,7 +97,7 @@ export function ArticleView() {
                 <div className="flex flex-wrap items-center gap-6 text-sm text-gray-600 mb-6 pb-6 border-b border-gray-200">
                   <div className="flex items-center space-x-2">
                     <User className="w-4 h-4" />
-                    <span>Yogodyaan Team</span>
+                    <span>{article.author?.full_name || 'Yogodyaan Team'}</span>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Calendar className="w-4 h-4" />
