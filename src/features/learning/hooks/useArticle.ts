@@ -10,45 +10,45 @@ export function useArticle(id: string) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const fetchArticle = async () => {
-    try {
-      setLoading(true)
-      setError(null)
+const fetchArticle = async () => {
+  try {
+    setLoading(true)
+    setError(null)
 
-      // Fetch article
-      const { data: articleData, error: articleError } = await supabase
-        .from('articles')
-        .select('*, author:profiles(full_name)')
-        .eq('id', id)
-        .eq('status', 'published')
-        .single()
+    // Fetch article with author full_name
+    const { data: articleData, error: articleError } = await supabase
+      .from('articles')
+      .select('*, author:profiles(full_name)')
+      .eq('id', id)
+      .eq('status', 'published')
+      .single()
 
-      if (articleError) throw articleError
-      setArticle(articleData)
+    if (articleError) throw articleError
+    setArticle(articleData)
 
-      // Fetch ratings
-      const { data: ratingsData, error: ratingsError } = await supabase
-        .from('ratings')
-        .select('*, author:profiles(full_name)')
-        .eq('article_id', id)
+    // Fetch ratings without author selection (since ratings table doesn’t have author_id)
+    const { data: ratingsData, error: ratingsError } = await supabase
+      .from('ratings')
+      .select('*')
+      .eq('article_id', id)
 
-      if (ratingsError) throw ratingsError
-      setRatings(ratingsData || [])
+    if (ratingsError) throw ratingsError
+    setRatings(ratingsData || [])
 
-      // Check if user has already rated
-      const fingerprint = await getFingerprint()
-      const existingRating = ratingsData?.find(r => r.fingerprint === fingerprint)
-      setUserRating(existingRating?.rating || null)
+    // Check if user has already rated
+    const fingerprint = await getFingerprint()
+    const existingRating = ratingsData?.find(r => r.fingerprint === fingerprint)
+    setUserRating(existingRating?.rating || null)
 
-      // Record view
-      await recordView(id, fingerprint)
+    // Record view
+    await recordView(id, fingerprint)
 
-    } catch (err: any) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
+  } catch (err: any) {
+    setError(err.message)
+  } finally {
+    setLoading(false)
   }
+}
 
   const recordView = async (articleId: string, fingerprint: string) => {
     try {
