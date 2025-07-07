@@ -25,6 +25,7 @@ export function UserManagement() {
   const [roleFilter, setRoleFilter] = useState('all')
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null)
   const [showRoleManagement, setShowRoleManagement] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     fetchUsers()
@@ -33,76 +34,36 @@ export function UserManagement() {
   const fetchUsers = async () => {
     try {
       setLoading(true)
+      setError(null)
       
-      // Fetch all three datasets concurrently
-      const [authUsersResponse, profilesResponse, userRolesResponse] = await Promise.all([
-        supabase.auth.admin.listUsers(),
-        supabase.from('profiles').select('*'),
-        supabase.from('user_roles').select(`
-          user_id,
-          roles(name)
-        `)
-      ])
-
-      // Check for errors in auth users fetch
-      if (authUsersResponse.error) {
-        console.error('Error fetching auth users:', authUsersResponse.error)
-        throw authUsersResponse.error
+      // Get the current session
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (!session) {
+        throw new Error('No active session')
       }
 
-      // Check for errors in profiles fetch
-      if (profilesResponse.error) {
-        console.error('Error fetching profiles:', profilesResponse.error)
-      }
-
-      // Check for errors in user roles fetch
-      if (userRolesResponse.error) {
-        console.error('Error fetching user roles:', userRolesResponse.error)
-      }
-
-      const authUsers = authUsersResponse.data.users || []
-      const profilesData = profilesResponse.data || []
-      const userRolesData = userRolesResponse.data || []
-
-      // Create a map for quick profile lookup
-      const profilesMap = new Map(
-        profilesData.map(profile => [profile.user_id, profile])
-      )
-
-      // Create a map for quick user roles lookup
-      const userRolesMap = new Map()
-      userRolesData.forEach(userRole => {
-        if (!userRolesMap.has(userRole.user_id)) {
-          userRolesMap.set(userRole.user_id, [])
-        }
-        if (userRole.roles?.name) {
-          userRolesMap.get(userRole.user_id).push(userRole.roles.name)
-        }
+      // Call the secure Edge Function instead of direct admin API
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-users`
+      
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
       })
 
-      // Iterate through auth users and construct comprehensive user objects
-      const comprehensiveUsers = authUsers.map(authUser => {
-        const profile = profilesMap.get(authUser.id)
-        const userRoles = userRolesMap.get(authUser.id) || []
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`)
+      }
 
-        return {
-          id: authUser.id,
-          user_id: authUser.id,
-          // Prioritize profile data, fallback to auth data or empty strings
-          full_name: profile?.full_name || authUser.user_metadata?.full_name || '',
-          email: profile?.email || authUser.email || '',
-          phone: profile?.phone || authUser.user_metadata?.phone || '',
-          bio: profile?.bio || authUser.user_metadata?.bio || '',
-          created_at: profile?.created_at || authUser.created_at,
-          // Default to 'user' role if no roles assigned
-          user_roles: userRoles.length > 0 ? userRoles : ['user']
-        }
-      })
-
-      setUsers(comprehensiveUsers)
+      const data = await response.json()
+      setUsers(data.users || [])
     } catch (error) {
       console.error('Error in fetchUsers:', error)
-      // If there's an error, set empty users array
+      setError(error instanceof Error ? error.message : 'Failed to fetch users')
       setUsers([])
     } finally {
       setLoading(false)
@@ -164,6 +125,22 @@ export function UserManagement() {
     return (
       <div className="flex justify-center py-12">
         <LoadingSpinner size="lg" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
+        <div className="text-red-600 font-semibold mb-2">Error Loading Users</div>
+        <div className="text-red-500 text-sm mb-4">{error}</div>
+        <Button 
+          onClick={fetchUsers}
+          variant="outline"
+          className="border-red-300 text-red-600 hover:bg-red-50"
+        >
+          Try Again
+        </Button>
       </div>
     )
   }
