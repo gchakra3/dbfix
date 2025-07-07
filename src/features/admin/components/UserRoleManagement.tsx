@@ -42,16 +42,16 @@ export function UserRoleManagement({ userId, userEmail, currentRoles, onRoleUpda
   
   // Initialize selectedRoles with currentRoles on mount
   useEffect(() => {
-    setSelectedRoles(currentRoles || []);
+    setSelectedRoles([...(currentRoles || [])]);
   }, [currentRoles]);
 
   useEffect(() => {
     // Reset selected roles to match current roles on component mount or when currentRoles changes
-    setSelectedRoles([...currentRoles]);
+    setSelectedRoles([...(currentRoles || [])]);
     // Then fetch other data
     fetchAvailableRoles();
     fetchRoleChangeHistory();
-  }, [userId])
+  }, [userId, currentRoles])
 
   const fetchAvailableRoles = async () => {
     try {
