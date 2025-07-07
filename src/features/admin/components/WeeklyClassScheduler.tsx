@@ -104,6 +104,8 @@ export function WeeklyClassScheduler() {
           .select(`
             user_id,
             full_name,
+            bio,
+            specialties,
             user_roles!inner(
               roles!inner(
                 name
@@ -121,7 +123,9 @@ export function WeeklyClassScheduler() {
       // Map instructors data to the expected format
       const mappedInstructors = instructorsRes.data?.map(profile => ({
         user_id: profile.user_id,
-        full_name: profile.full_name
+        full_name: profile.full_name,
+        bio: profile.bio,
+        specialties: profile.specialties
       })) || []
 
       setSchedules(schedulesRes.data || [])
