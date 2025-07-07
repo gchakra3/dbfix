@@ -15,10 +15,10 @@ interface ClassType {
 }
 
 interface Instructor {
-  id: string
-  name: string
-  bio: string
-  specialties: string[]
+  user_id: string
+  full_name: string
+  bio?: string
+  specialties?: string[]
 }
 
 interface ClassSchedule {
@@ -88,7 +88,7 @@ export function WeeklyClassScheduler() {
           .select(`
             *,
             class_type:class_types(*),
-            instructor:instructors(*)
+            instructor:profiles!class_schedules_instructor_id_fkey(user_id, full_name)
           `)
           .order('day_of_week')
           .order('start_time'),
@@ -100,19 +100,33 @@ export function WeeklyClassScheduler() {
           .order('name'),
         
         supabase
-          .from('instructors')
-          .select('*')
-          .eq('is_active', true)
-          .order('name')
+          .from('profiles')
+          .select(`
+            user_id,
+            full_name,
+            user_roles!inner(
+              roles!inner(
+                name
+              )
+            )
+          `)
+          .eq('user_roles.roles.name', 'instructor')
+          .order('full_name')
       ])
 
       if (schedulesRes.error) throw schedulesRes.error
       if (classTypesRes.error) throw classTypesRes.error
       if (instructorsRes.error) throw instructorsRes.error
 
+      // Map instructors data to the expected format
+      const mappedInstructors = instructorsRes.data?.map(profile => ({
+        user_id: profile.user_id,
+        full_name: profile.full_name
+      })) || []
+
       setSchedules(schedulesRes.data || [])
       setClassTypes(classTypesRes.data || [])
-      setInstructors(instructorsRes.data || [])
+      setInstructors(mappedInstructors)
     } catch (error) {
       console.error('Error fetching data:', error)
     } finally {
@@ -375,8 +389,8 @@ export function WeeklyClassScheduler() {
                   >
                     <option value="">Select instructor</option>
                     {instructors.map(instructor => (
-                      <option key={instructor.id} value={instructor.id}>
-                        {instructor.name}
+                      <option key={instructor.user_id} value={instructor.user_id}>
+                        {instructor.full_name}
                       </option>
                     ))}
                   </select>
@@ -584,7 +598,7 @@ export function WeeklyClassScheduler() {
                       </div>
                       
                       <div className="text-gray-700 font-medium">
-                        {schedule.instructor?.name}
+                        {schedule.instructor?.full_name}
                       </div>
                       
                       {schedule.class_type && (
