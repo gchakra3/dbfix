@@ -73,7 +73,7 @@ export function ClassAssignmentManager() {
     try {
       setLoading(true)
       
-      // Fetch assignments without the problematic foreign key hint
+      // Fetch assignments
       const { data: assignmentsData, error: assignmentsError } = await supabase
         .from('class_assignments')
         .select('*')
@@ -94,39 +94,30 @@ export function ClassAssignmentManager() {
 
       if (classesError) throw classesError
 
-      // Fetch profiles separately
+      // Fetch profiles with user_roles using the correct join
       const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
-        .select('user_id, full_name, email')
+        .select(`
+          user_id,
+          full_name,
+          email,
+          user_roles(
+            roles(name)
+          )
+        `)
 
       if (profilesError) throw profilesError
 
-      // Fetch user roles separately
-      const { data: userRolesData, error: userRolesError } = await supabase
-        .from('user_roles')
-        .select(`
-          user_id,
-          roles(name)
-        `)
-
-      if (userRolesError) throw userRolesError
-
-      // Merge profiles with roles
-      const profilesWithRoles = (profilesData || []).map(profile => {
-        const userRoles = (userRolesData || [])
-          .filter(ur => ur.user_id === profile.user_id)
-          .map(ur => ({ roles: ur.roles }))
-        
-        return {
-          ...profile,
-          user_roles: userRoles
-        }
+      // Filter profiles to only include those with instructor or yoga_acharya roles
+      const filteredProfiles = (profilesData || []).filter(profile => {
+        const userRoles = profile.user_roles?.map(ur => ur.roles?.name) || []
+        return userRoles.includes('instructor') || userRoles.includes('yoga_acharya')
       })
 
       // Merge assignments with related data
       const enrichedAssignments = (assignmentsData || []).map(assignment => {
         const scheduledClass = classesData?.find(cls => cls.id === assignment.scheduled_class_id)
-        const instructorProfile = profilesData?.find(profile => profile.user_id === assignment.instructor_id)
+        const instructorProfile = filteredProfiles?.find(profile => profile.user_id === assignment.instructor_id)
         
         return {
           ...assignment,
@@ -137,7 +128,7 @@ export function ClassAssignmentManager() {
 
       setAssignments(enrichedAssignments)
       setScheduledClasses(classesData || [])
-      setUserProfiles(profilesWithRoles)
+      setUserProfiles(filteredProfiles)
     } catch (error) {
       console.error('Error fetching data:', error)
     } finally {
