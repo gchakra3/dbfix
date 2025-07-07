@@ -79,74 +79,79 @@ export function WeeklyClassScheduler() {
   }, [])
 
   const fetchData = async () => {
-    try {
-      setLoading(true)
+  try {
+    setLoading(true)
+
+    // Step 1: Get the instructor role ID
+    const { data: instructorRole, error: roleError } = await supabase
+      .from('roles')
+      .select('id')
+      .eq('name', 'instructor')
+      .single()
+
+    if (roleError) throw roleError
+
+    // Step 2: Get user IDs with instructor role
+    const { data: instructorUserRoles, error: userRolesError } = await supabase
+      .from('user_roles')
+      .select('user_id')
+      .eq('role_id', instructorRole.id)
+
+    if (userRolesError) throw userRolesError
+
+    const instructorUserIds = instructorUserRoles.map(ur => ur.user_id)
+
+    // Step 3: Fetch schedules, class types, and instructors
+    const [schedulesRes, classTypesRes, instructorsRes] = await Promise.all([
+      supabase
+        .from('class_schedules')
+        .select(`
+          *,
+          class_type:class_types(*)
+        `)
+        .order('day_of_week')
+        .order('start_time'),
       
-      // First, get the instructor role ID
-      const { data: instructorRole, error: roleError } = await supabase
-        .from('roles')
-        .select('id')
-        .eq('name', 'instructor')
-        .single()
+      supabase
+        .from('class_types')
+        .select('*')
+        .eq('is_active', true)
+        .order('name'),
+      
+      supabase
+        .from('profiles')
+        .select('user_id, full_name, bio, specialties')
+        .in('user_id', instructorUserIds)
+        .order('full_name')
+    ])
 
-      if (roleError) throw roleError
+    if (schedulesRes.error) throw schedulesRes.error
+    if (classTypesRes.error) throw classTypesRes.error
+    if (instructorsRes.error) throw instructorsRes.error
 
-      // Then get all user IDs with instructor role
-      const { data: instructorUserRoles, error: userRolesError } = await supabase
-        .from('user_roles')
-        .select('user_id')
-        .eq('role_id', instructorRole.id)
+    // Step 4: Map instructors to quickly lookup by user_id
+    const instructorMap = (instructorsRes.data || []).reduce((acc, profile) => {
+      acc[profile.user_id] = profile
+      return acc
+    }, {} as Record<string, Instructor>)
 
-      if (userRolesError) throw userRolesError
+    // Step 5: Enrich each schedule with instructor object
+    const enrichedSchedules = (schedulesRes.data || []).map(schedule => ({
+      ...schedule,
+      instructor: instructorMap[schedule.instructor_id] || undefined
+    }))
 
-      const instructorUserIds = instructorUserRoles.map(ur => ur.user_id)
-
-      const [schedulesRes, classTypesRes, instructorsRes] = await Promise.all([
-        supabase
-          .from('class_schedules')
-          .select(`
-            *,
-            class_type:class_types(*),
-            instructor:profiles!class_schedules_instructor_id_fkey(user_id, full_name)
-          `)
-          .order('day_of_week')
-          .order('start_time'),
-        
-        supabase
-          .from('class_types')
-          .select('*')
-          .eq('is_active', true)
-          .order('name'),
-        
-        // Get profiles for users with instructor role
-        supabase
-          .from('profiles')
-          .select('user_id, full_name, bio, specialties')
-          .in('user_id', instructorUserIds)
-          .order('full_name')
-      ])
-
-      if (schedulesRes.error) throw schedulesRes.error
-      if (classTypesRes.error) throw classTypesRes.error
-      if (instructorsRes.error) throw instructorsRes.error
-
-      // Map instructors data to the expected format
-      const mappedInstructors = instructorsRes.data?.map(profile => ({
-        user_id: profile.user_id,
-        full_name: profile.full_name,
-        bio: profile.bio,
-        specialties: profile.specialties
-      })) || []
-
-      setSchedules(schedulesRes.data || [])
-      setClassTypes(classTypesRes.data || [])
-      setInstructors(mappedInstructors)
-    } catch (error) {
-      console.error('Error fetching data:', error)
-    } finally {
-      setLoading(false)
-    }
+    // Step 6: Set state
+    setSchedules(enrichedSchedules)
+    setClassTypes(classTypesRes.data || [])
+    setInstructors(instructorsRes.data || [])
+  } catch (error) {
+    console.error('Error fetching data:', error)
+  } finally {
+    setLoading(false)
   }
+}
+
 
   const handleInputChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }))
