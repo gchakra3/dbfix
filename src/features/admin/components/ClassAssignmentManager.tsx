@@ -25,18 +25,17 @@ interface ClassAssignment {
       name: string
     }
   }
-  instructor?: {
-    name: string
+  instructor_profile?: {
+    full_name: string
     email: string
+    user_id: string
   }
 }
 
-interface User {
-  id: string
+interface UserProfile {
+  user_id: string
+  full_name: string
   email: string
-  profiles: {
-    full_name: string
-  }[]
   user_roles: {
     roles: {
       name: string
@@ -47,7 +46,7 @@ interface User {
 export function ClassAssignmentManager() {
   const [assignments, setAssignments] = useState<ClassAssignment[]>([])
   const [scheduledClasses, setScheduledClasses] = useState<any[]>([])
-  const [users, setUsers] = useState<User[]>([])
+  const [userProfiles, setUserProfiles] = useState<UserProfile[]>([])
   const [loading, setLoading] = useState(true)
   const [showAssignForm, setShowAssignForm] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -74,7 +73,7 @@ export function ClassAssignmentManager() {
     try {
       setLoading(true)
       
-      const [assignmentsRes, classesRes, usersRes] = await Promise.all([
+      const [assignmentsRes, classesRes, profilesRes] = await Promise.all([
         supabase
           .from('class_assignments')
           .select(`
@@ -86,10 +85,10 @@ export function ClassAssignmentManager() {
               class_type:class_types(name, difficulty_level),
               instructor:instructors(name)
             ),
-            instructor:users!class_assignments_instructor_id_fkey(
-              id,
-              email,
-              profiles(full_name)
+            instructor_profile:profiles!class_assignments_instructor_id_fkey(
+              user_id,
+              full_name,
+              email
             )
           `)
           .order('assigned_at', { ascending: false }),
@@ -105,22 +104,22 @@ export function ClassAssignmentManager() {
           .order('start_time'),
         
         supabase
-          .from('users')
+          .from('profiles')
           .select(`
-            id,
+            user_id,
+            full_name,
             email,
-            profiles(full_name),
             user_roles(roles(name))
           `)
       ])
 
       if (assignmentsRes.error) throw assignmentsRes.error
       if (classesRes.error) throw classesRes.error
-      if (usersRes.error) throw usersRes.error
+      if (profilesRes.error) throw profilesRes.error
 
       setAssignments(assignmentsRes.data || [])
       setScheduledClasses(classesRes.data || [])
-      setUsers(usersRes.data || [])
+      setUserProfiles(profilesRes.data || [])
     } catch (error) {
       console.error('Error fetching data:', error)
     } finally {
@@ -211,10 +210,10 @@ export function ClassAssignmentManager() {
   }
 
   const getFilteredUsers = () => {
-    if (formData.role_type === 'all') return users
+    if (formData.role_type === 'all') return userProfiles
     
-    return users.filter(user => {
-      const userRoles = user.user_roles?.map(ur => ur.roles?.name) || []
+    return userProfiles.filter(profile => {
+      const userRoles = profile.user_roles?.map(ur => ur.roles?.name) || []
       if (formData.role_type === 'instructor') {
         return userRoles.includes('instructor')
       }
@@ -228,12 +227,12 @@ export function ClassAssignmentManager() {
   const getFilteredAssignments = () => {
     return assignments.filter(assignment => {
       const matchesRole = roleFilter === 'all' || 
-        (assignment.instructor && getUserRole(assignment.instructor_id) === roleFilter)
+        (assignment.instructor_profile && getUserRole(assignment.instructor_id) === roleFilter)
       
       const matchesStatus = statusFilter === 'all' || assignment.payment_status === statusFilter
       
       const matchesSearch = searchTerm === '' ||
-        assignment.instructor?.profiles?.[0]?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        assignment.instructor_profile?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         assignment.scheduled_class?.class_type?.name?.toLowerCase().includes(searchTerm.toLowerCase())
       
       return matchesRole && matchesStatus && matchesSearch
@@ -241,8 +240,8 @@ export function ClassAssignmentManager() {
   }
 
   const getUserRole = (userId: string) => {
-    const user = users.find(u => u.id === userId)
-    const userRoles = user?.user_roles?.map(ur => ur.roles?.name) || []
+    const profile = userProfiles.find(p => p.user_id === userId)
+    const userRoles = profile?.user_roles?.map(ur => ur.roles?.name) || []
     
     if (userRoles.includes('yoga_acharya')) return 'yoga_acharya'
     if (userRoles.includes('instructor')) return 'instructor'
@@ -362,9 +361,9 @@ export function ClassAssignmentManager() {
                   }`}
                 >
                   <option value="">Select {formData.role_type === 'instructor' ? 'instructor' : 'yoga acharya'}</option>
-                  {getFilteredUsers().map(user => (
-                    <option key={user.id} value={user.id}>
-                      {user.profiles?.[0]?.full_name || user.email}
+                  {getFilteredUsers().map(profile => (
+                    <option key={profile.user_id} value={profile.user_id}>
+                      {profile.full_name || profile.email}
                     </option>
                   ))}
                 </select>
@@ -512,7 +511,7 @@ export function ClassAssignmentManager() {
                     <td className="px-6 py-4">
                       <div>
                         <div className="text-sm font-medium text-gray-900">
-                          {assignment.instructor?.profiles?.[0]?.full_name || assignment.instructor?.email}
+                          {assignment.instructor_profile?.full_name || assignment.instructor_profile?.email}
                         </div>
                         <div className="text-sm text-gray-500 capitalize">
                           {getUserRole(assignment.instructor_id).replace('_', ' ')}
