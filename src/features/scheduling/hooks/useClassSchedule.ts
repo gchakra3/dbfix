@@ -19,8 +19,7 @@ interface ClassSchedule {
     price: number
   }
   instructor: {
-    name: string
-    bio: string
+    full_name: string
   }
 }
 
