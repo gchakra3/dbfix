@@ -34,89 +34,78 @@ export function UserManagement() {
     try {
       setLoading(true)
       
-      // Fetch all users from auth.users (this requires service role or RLS policy)
-      const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers()
-      
-      if (authError) {
-        console.error('Error fetching auth users:', authError)
-        // Fallback to profiles table
-        await fetchFromProfiles()
-        return
-      }
-
-      // Fetch user roles
-      const { data: userRolesData, error: rolesError } = await supabase
-        .from('user_roles')
-        .select(`
+      // Fetch all three datasets concurrently
+      const [authUsersResponse, profilesResponse, userRolesResponse] = await Promise.all([
+        supabase.auth.admin.listUsers(),
+        supabase.from('profiles').select('*'),
+        supabase.from('user_roles').select(`
           user_id,
           roles(name)
         `)
+      ])
 
-      if (rolesError) {
-        console.error('Error fetching user roles:', rolesError)
+      // Check for errors in auth users fetch
+      if (authUsersResponse.error) {
+        console.error('Error fetching auth users:', authUsersResponse.error)
+        throw authUsersResponse.error
       }
 
-      // Combine auth users with their roles
-      const usersWithRoles = authUsers.users.map(user => {
-        const userRoles = userRolesData?.filter(ur => ur.user_id === user.id) || []
-        const roleNames = userRoles.map(ur => ur.roles?.name).filter(Boolean)
-        
-        return {
-          id: user.id,
-          user_id: user.id,
-          full_name: user.user_metadata?.full_name || '',
-          email: user.email || '',
-          phone: user.user_metadata?.phone || '',
-          bio: user.user_metadata?.bio || '',
-          created_at: user.created_at,
-          user_roles: roleNames.length > 0 ? roleNames : ['user']
+      // Check for errors in profiles fetch
+      if (profilesResponse.error) {
+        console.error('Error fetching profiles:', profilesResponse.error)
+      }
+
+      // Check for errors in user roles fetch
+      if (userRolesResponse.error) {
+        console.error('Error fetching user roles:', userRolesResponse.error)
+      }
+
+      const authUsers = authUsersResponse.data.users || []
+      const profilesData = profilesResponse.data || []
+      const userRolesData = userRolesResponse.data || []
+
+      // Create a map for quick profile lookup
+      const profilesMap = new Map(
+        profilesData.map(profile => [profile.user_id, profile])
+      )
+
+      // Create a map for quick user roles lookup
+      const userRolesMap = new Map()
+      userRolesData.forEach(userRole => {
+        if (!userRolesMap.has(userRole.user_id)) {
+          userRolesMap.set(userRole.user_id, [])
+        }
+        if (userRole.roles?.name) {
+          userRolesMap.get(userRole.user_id).push(userRole.roles.name)
         }
       })
 
-      setUsers(usersWithRoles)
+      // Iterate through auth users and construct comprehensive user objects
+      const comprehensiveUsers = authUsers.map(authUser => {
+        const profile = profilesMap.get(authUser.id)
+        const userRoles = userRolesMap.get(authUser.id) || []
+
+        return {
+          id: authUser.id,
+          user_id: authUser.id,
+          // Prioritize profile data, fallback to auth data or empty strings
+          full_name: profile?.full_name || authUser.user_metadata?.full_name || '',
+          email: profile?.email || authUser.email || '',
+          phone: profile?.phone || authUser.user_metadata?.phone || '',
+          bio: profile?.bio || authUser.user_metadata?.bio || '',
+          created_at: profile?.created_at || authUser.created_at,
+          // Default to 'user' role if no roles assigned
+          user_roles: userRoles.length > 0 ? userRoles : ['user']
+        }
+      })
+
+      setUsers(comprehensiveUsers)
     } catch (error) {
       console.error('Error in fetchUsers:', error)
-      await fetchFromProfiles()
+      // If there's an error, set empty users array
+      setUsers([])
     } finally {
       setLoading(false)
-    }
-  }
-
-  const fetchFromProfiles = async () => {
-    try {
-      // Fallback: use profiles data
-      const { data: profilesData, error: profilesError } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false })
-
-      if (profilesError) throw profilesError
-
-      // Fetch user roles
-      const { data: userRolesData, error: rolesError } = await supabase
-        .from('user_roles')
-        .select(`
-          user_id,
-          roles(name)
-        `)
-
-      if (rolesError) {
-        console.error('Error fetching user roles:', rolesError)
-      }
-
-      const usersWithRoles = (profilesData || []).map(profile => {
-        const userRoles = userRolesData?.filter(ur => ur.user_id === profile.user_id) || []
-        const roleNames = userRoles.map(ur => ur.roles?.name).filter(Boolean)
-        
-        return {
-          ...profile,
-          user_roles: roleNames.length > 0 ? roleNames : ['user']
-        }
-      })
-
-      setUsers(usersWithRoles)
-    } catch (error) {
-      console.error('Error fetching from profiles:', error)
     }
   }
 
