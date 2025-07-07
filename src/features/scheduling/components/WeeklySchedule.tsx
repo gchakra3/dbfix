@@ -15,7 +15,6 @@ export function WeeklySchedule() {
 
   const handleBookClass = async (schedule: any) => {
     if (!user) {
-      // Redirect to login with return URL
       navigate('/login?redirect=/schedule')
       return
     }
@@ -23,7 +22,6 @@ export function WeeklySchedule() {
     setBookingLoading(schedule.id)
 
     try {
-      // Get next occurrence of this class (find the next date for this day of week)
       const today = new Date()
       const targetDay = schedule.day_of_week
       const daysUntilTarget = (targetDay - today.getDay() + 7) % 7
@@ -32,7 +30,6 @@ export function WeeklySchedule() {
       
       const classDate = nextClassDate.toISOString().split('T')[0]
 
-      // Check if user already has a booking for this class on this date
       const { data: existingBooking, error: checkError } = await supabase
         .from('bookings')
         .select('id')
@@ -51,7 +48,6 @@ export function WeeklySchedule() {
         return
       }
 
-      // Create booking
       const bookingData = {
         user_id: user.id,
         class_name: schedule.class_type.name,
@@ -100,7 +96,6 @@ export function WeeklySchedule() {
     )
   }
 
-  // Group schedules by day
   const schedulesByDay = schedules.reduce((acc, schedule) => {
     const day = schedule.day_of_week
     if (!acc[day]) acc[day] = []
@@ -108,7 +103,7 @@ export function WeeklySchedule() {
     return acc
   }, {} as Record<number, typeof schedules>)
 
-  const days = [0, 1, 2, 3, 4, 5, 6] // Sunday to Saturday
+  const days = [0, 1, 2, 3, 4, 5, 6]
 
   return (
     <div className="bg-white rounded-xl shadow-lg overflow-hidden">
@@ -190,7 +185,6 @@ export function WeeklySchedule() {
         ))}
       </div>
 
-      {/* Booking Information */}
       <div className="p-6 bg-gray-50 border-t border-gray-200">
         <div className="text-center">
           <h3 className="text-lg font-semibold text-gray-900 mb-2">How Booking Works</h3>
