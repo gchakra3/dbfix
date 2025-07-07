@@ -87,7 +87,7 @@ export function ClassAssignmentManager() {
         .select(`
           *,
           class_type:class_types(name, difficulty_level),
-          instructor:profiles!scheduled_classes_instructor_id_fkey(full_name)
+          instructor:profiles!class_schedules_instructor_id_fkey(full_name)
         `)
         .eq('status', 'scheduled')
         .order('start_time')
