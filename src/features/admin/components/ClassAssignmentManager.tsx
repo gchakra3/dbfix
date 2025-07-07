@@ -73,53 +73,71 @@ export function ClassAssignmentManager() {
     try {
       setLoading(true)
       
-      const [assignmentsRes, classesRes, profilesRes] = await Promise.all([
-        supabase
-          .from('class_assignments')
-          .select(`
-            *,
-            scheduled_class:scheduled_classes(
-              id,
-              start_time,
-              end_time,
-              class_type:class_types(name, difficulty_level),
-              instructor:instructors(name)
-            ),
-            instructor_profile:profiles!class_assignments_instructor_id_fkey(
-              user_id,
-              full_name,
-              email
-            )
-          `)
-          .order('assigned_at', { ascending: false }),
-        
-        supabase
-          .from('scheduled_classes')
-          .select(`
-            *,
-            class_type:class_types(name, difficulty_level),
-            instructor:instructors(name)
-          `)
-          .eq('status', 'scheduled')
-          .order('start_time'),
-        
-        supabase
-          .from('profiles')
-          .select(`
-            user_id,
-            full_name,
-            email,
-            user_roles(roles(name))
-          `)
-      ])
+      // Fetch assignments without the problematic foreign key hint
+      const { data: assignmentsData, error: assignmentsError } = await supabase
+        .from('class_assignments')
+        .select('*')
+        .order('assigned_at', { ascending: false })
 
-      if (assignmentsRes.error) throw assignmentsRes.error
-      if (classesRes.error) throw classesRes.error
-      if (profilesRes.error) throw profilesRes.error
+      if (assignmentsError) throw assignmentsError
 
-      setAssignments(assignmentsRes.data || [])
-      setScheduledClasses(classesRes.data || [])
-      setUserProfiles(profilesRes.data || [])
+      // Fetch scheduled classes
+      const { data: classesData, error: classesError } = await supabase
+        .from('scheduled_classes')
+        .select(`
+          *,
+          class_type:class_types(name, difficulty_level),
+          instructor:instructors(name)
+        `)
+        .eq('status', 'scheduled')
+        .order('start_time')
+
+      if (classesError) throw classesError
+
+      // Fetch profiles separately
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('user_id, full_name, email')
+
+      if (profilesError) throw profilesError
+
+      // Fetch user roles separately
+      const { data: userRolesData, error: userRolesError } = await supabase
+        .from('user_roles')
+        .select(`
+          user_id,
+          roles(name)
+        `)
+
+      if (userRolesError) throw userRolesError
+
+      // Merge profiles with roles
+      const profilesWithRoles = (profilesData || []).map(profile => {
+        const userRoles = (userRolesData || [])
+          .filter(ur => ur.user_id === profile.user_id)
+          .map(ur => ({ roles: ur.roles }))
+        
+        return {
+          ...profile,
+          user_roles: userRoles
+        }
+      })
+
+      // Merge assignments with related data
+      const enrichedAssignments = (assignmentsData || []).map(assignment => {
+        const scheduledClass = classesData?.find(cls => cls.id === assignment.scheduled_class_id)
+        const instructorProfile = profilesData?.find(profile => profile.user_id === assignment.instructor_id)
+        
+        return {
+          ...assignment,
+          scheduled_class: scheduledClass,
+          instructor_profile: instructorProfile
+        }
+      })
+
+      setAssignments(enrichedAssignments)
+      setScheduledClasses(classesData || [])
+      setUserProfiles(profilesWithRoles)
     } catch (error) {
       console.error('Error fetching data:', error)
     } finally {

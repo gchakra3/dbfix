@@ -37,22 +37,34 @@ export function useUserProfiles() {
         return
       }
 
-      // Fallback: fetch profiles directly with user roles
+      // Fallback: fetch profiles and user roles separately
       const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
-        .select(`
-          *,
-          user_roles(
-            roles(name)
-          )
-        `)
+        .select('*')
         .order('created_at', { ascending: false })
 
       if (profilesError) throw profilesError
 
+      // Fetch user roles separately
+      const { data: userRolesData, error: userRolesError } = await supabase
+        .from('user_roles')
+        .select(`
+          user_id,
+          roles(name)
+        `)
+
+      if (userRolesError) throw userRolesError
+
       // Transform the data to match the expected format
       const transformedData = (profilesData || []).map(profile => {
-        const userRoles = profile.user_roles?.map((ur: any) => ur.roles?.name).filter(Boolean) || ['user']
+        // Find roles for this user
+        const userRoleEntries = (userRolesData || []).filter(ur => ur.user_id === profile.user_id)
+        const userRoles = userRoleEntries.map(ur => ur.roles?.name).filter(Boolean)
+        
+        // If no roles found, default to 'user'
+        if (userRoles.length === 0) {
+          userRoles.push('user')
+        }
         
         return {
           ...profile,
