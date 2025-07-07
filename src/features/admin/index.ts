@@ -9,6 +9,7 @@ export { FormSubmissions } from './components/FormSubmissions';
 export { InstructorManagement } from './components/InstructorManagement';
 export { NewsletterManagement } from './components/NewsletterManagement';
 export { UserRoleManagement } from './components/UserRoleManagement';
+export { UserManagement } from './components/UserManagement';
 export { WeeklyClassScheduler } from './components/WeeklyClassScheduler';
 export { ClassTypeManager } from './components/ClassTypeManager';
 

@@ -35,7 +35,7 @@ import { FormSubmissions } from '../components/FormSubmissions'
 import { InstructorDashboard } from '../components/InstructorDashboard'
 import { InstructorManagement } from '../components/InstructorManagement'
 import { NewsletterManagement } from '../components/NewsletterManagement'
-import { UserRoleManagement } from '../components/UserRoleManagement'
+import { UserManagement } from '../components/UserManagement'
 import { WeeklyClassScheduler } from '../components/WeeklyClassScheduler'
 import { YogaAcharyaDashboard } from '../components/YogaAcharyaDashboard'
 import { useAdmin } from '../contexts/AdminContext'
@@ -259,7 +259,7 @@ export function AdminDashboard() {
             </div>
           </>
         )}
-        {activeTab === 'users' && <UserRoleManagement />}
+        {activeTab === 'users' && <UserManagement />}
         {activeTab === 'instructors' && <InstructorManagement />}
         {activeTab === 'classes' && <ClassTypeManager />}
         {activeTab === 'schedule' && <WeeklyClassScheduler />}
