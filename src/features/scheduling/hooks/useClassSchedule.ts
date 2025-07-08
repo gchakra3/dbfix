@@ -32,23 +32,50 @@ export function useClassSchedule() {
     try {
       setLoading(true)
       setError(null)
+      
+      console.log('🔍 Fetching class schedules...')
 
       const { data, error: fetchError } = await supabase
         .from('class_schedules')
         .select(`
           *,
           class_type:class_types(name, description, difficulty_level, price),
-          instructor:profiles(full_name)
+          instructor:profiles(full_name, email)
         `)
         .eq('is_active', true)
         .order('day_of_week')
         .order('start_time')
 
       if (fetchError) throw fetchError
+      
+      console.log('📊 Raw schedule data:', data)
+      
+      // Filter out schedules with invalid instructor data
+      const validSchedules = (data || []).filter(schedule => {
+        const hasValidInstructor = schedule.instructor?.full_name?.trim() || 
+                                  schedule.instructor?.email?.trim()
+        
+        if (!hasValidInstructor) {
+          console.warn('⚠️ Filtering out schedule with invalid instructor:', schedule)
+        }
+        
+        return hasValidInstructor
+      }).map(schedule => ({
+        ...schedule,
+        instructor: {
+          ...schedule.instructor,
+          full_name: schedule.instructor.full_name?.trim() || 
+                    schedule.instructor.email?.split('@')[0]?.replace(/[._]/g, ' ') || 
+                    'Unknown Instructor'
+        }
+      }))
+      
+      console.log('✅ Valid schedules after filtering:', validSchedules)
 
-      setSchedules(data || [])
+      setSchedules(validSchedules)
+      console.log('✅ Schedule fetching completed successfully')
     } catch (err: any) {
-      console.error('Error fetching class schedules:', err)
+      console.error('❌ Error fetching class schedules:', err)
       setError(err.message)
     } finally {
       setLoading(false)
