@@ -82,24 +82,49 @@ export function WeeklyClassScheduler() {
   try {
     setLoading(true)
 
-    // Step 1: Get the instructor role ID
-    const { data: instructorRole, error: roleError } = await supabase
+    // Step 1: Get both instructor and yoga_acharya role IDs
+    console.log('🔍 Fetching instructor and yoga_acharya roles...')
+    const { data: roles, error: roleError } = await supabase
       .from('roles')
-      .select('id')
-      .eq('name', 'instructor')
-      .single()
+      .select('id, name')
+      .in('name', ['instructor', 'yoga_acharya'])
 
     if (roleError) throw roleError
+    
+    console.log('📋 Found roles:', roles)
+    
+    if (!roles || roles.length === 0) {
+      console.warn('⚠️ No instructor or yoga_acharya roles found')
+      setSchedules([])
+      setClassTypes([])
+      setInstructors([])
+      return
+    }
 
-    // Step 2: Get user IDs with instructor role
+    // Step 2: Get user IDs with instructor or yoga_acharya roles
+    const roleIds = roles.map(role => role.id)
+    console.log('🔑 Role IDs to search for:', roleIds)
+    
     const { data: instructorUserRoles, error: userRolesError } = await supabase
       .from('user_roles')
       .select('user_id')
-      .eq('role_id', instructorRole.id)
+      .in('role_id', roleIds)
 
     if (userRolesError) throw userRolesError
+    
+    console.log('👥 Found user roles:', instructorUserRoles)
 
     const instructorUserIds = instructorUserRoles.map(ur => ur.user_id)
+    
+    if (instructorUserIds.length === 0) {
+      console.warn('⚠️ No users found with instructor or yoga_acharya roles')
+      setSchedules([])
+      setClassTypes([])
+      setInstructors([])
+      return
+    }
+    
+    console.log('🆔 Instructor user IDs:', instructorUserIds)
 
     // Step 3: Fetch schedules, class types, and instructors
     const [schedulesRes, classTypesRes, instructorsRes] = await Promise.all([
@@ -120,33 +145,62 @@ export function WeeklyClassScheduler() {
       
       supabase
         .from('profiles')
-        .select('user_id, full_name, bio, specialties')
+        .select('user_id, full_name, email, bio, specialties')
         .in('user_id', instructorUserIds)
+        .not('full_name', 'is', null)
+        .neq('full_name', '')
         .order('full_name')
     ])
 
     if (schedulesRes.error) throw schedulesRes.error
     if (classTypesRes.error) throw classTypesRes.error
     if (instructorsRes.error) throw instructorsRes.error
+    
+    console.log('📊 Raw instructor profiles:', instructorsRes.data)
 
-    // Step 4: Map instructors to quickly lookup by user_id
-    const instructorMap = (instructorsRes.data || []).reduce((acc, profile) => {
+    // Step 4: Filter and validate instructor profiles
+    const validInstructors = (instructorsRes.data || []).filter(profile => {
+      const isValid = profile.user_id && 
+                     (profile.full_name?.trim() || profile.email)
+      
+      if (!isValid) {
+        console.warn('⚠️ Filtering out invalid instructor profile:', profile)
+      }
+      
+      return isValid
+    })
+    
+    console.log('✅ Valid instructors after filtering:', validInstructors)
+    
+    // Step 5: Map instructors to quickly lookup by user_id
+    const instructorMap = validInstructors.reduce((acc, profile) => {
+      // Ensure we have a display name
+      const displayName = profile.full_name?.trim() || 
+                         profile.email?.split('@')[0]?.replace(/[._]/g, ' ') || 
+                         'Unknown Instructor'
+      
       acc[profile.user_id] = profile
       return acc
     }, {} as Record<string, Instructor>)
 
-    // Step 5: Enrich each schedule with instructor object
+    console.log('🗺️ Instructor map:', instructorMap)
+
+    // Step 6: Enrich each schedule with instructor object
     const enrichedSchedules = (schedulesRes.data || []).map(schedule => ({
       ...schedule,
       instructor: instructorMap[schedule.instructor_id] || undefined
     }))
+    
+    console.log('📅 Enriched schedules:', enrichedSchedules)
 
-    // Step 6: Set state
+    // Step 7: Set state
     setSchedules(enrichedSchedules)
     setClassTypes(classTypesRes.data || [])
-    setInstructors(instructorsRes.data || [])
+    setInstructors(validInstructors)
+    
+    console.log('✅ Data fetching completed successfully')
   } catch (error) {
-    console.error('Error fetching data:', error)
+    console.error('❌ Error fetching data:', error)
   } finally {
     setLoading(false)
   }
